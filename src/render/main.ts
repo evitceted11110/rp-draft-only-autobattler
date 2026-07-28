@@ -10,6 +10,7 @@ import {
   setLoadout,
   triggerNames,
   type GameState,
+  type TimelineEntry,
 } from '../core/index.js'
 import { theme } from '../visual/theme.js'
 import './styles.css'
@@ -23,6 +24,14 @@ const saved = await sdk.storage.get<GameState>('active-run-v1')
 let state = isGameState(saved)
   ? saved
   : createInitialState(createSeed())
+type BattlePresentation = {
+  nextState: GameState
+  frame: number
+  speed: 1 | 2
+  playing: boolean
+}
+let battlePresentation: BattlePresentation | null = null
+let battleTimer: ReturnType<typeof setTimeout> | undefined
 
 function createSeed(): string {
   return `oath-${Date.now().toString(36)}`
@@ -153,6 +162,149 @@ function renderTimeline(): string {
   </section>`
 }
 
+function battleEntryClass(entry: TimelineEntry): string {
+  if (entry.kind !== 'trigger' || entry.directiveId === undefined) {
+    return entry.kind
+  }
+  const effect = getDirective(entry.directiveId).effect
+  if (
+    effect === 'damage' ||
+    effect === 'damage_per_round' ||
+    effect === 'guard_and_damage'
+  ) {
+    return 'player-strike'
+  }
+  if (effect === 'guard') return 'player-guard'
+  if (effect === 'heal') return 'player-heal'
+  return 'player-charge'
+}
+
+function renderBattleTheater(presentation: BattlePresentation): string {
+  const result = presentation.nextState.lastResult
+  if (result === undefined) throw new Error('戰鬥表演缺少結算結果')
+  const enemy = getCurrentEnemy(state)
+  const entry = result.timeline[presentation.frame]!
+  const visualClass = battleEntryClass(entry)
+  const playerPercent = Math.max(
+    0,
+    Math.min(100, (entry.playerResolve / 20) * 100),
+  )
+  const enemyPercent = Math.max(
+    0,
+    Math.min(100, (entry.enemyHealth / enemy.health) * 100),
+  )
+  const activeDirective = entry.directiveId
+  const script = enemy.attacks
+    .map(
+      (attack, index) => `<li class="${
+        index + 1 < entry.round
+          ? 'past'
+          : index + 1 === entry.round
+            ? 'active'
+            : ''
+      }">
+        <span>R${index + 1}</span><strong>${attack}</strong>
+      </li>`,
+    )
+    .join('')
+  const commandRail = state.loadout
+    .map((id, index) => {
+      const directive = getDirective(id)
+      return `<li class="${activeDirective === id ? 'active' : ''}">
+        <span>0${index + 1}</span>
+        <div><strong>${directive.name}</strong><small>${triggerNames[directive.trigger]}</small></div>
+      </li>`
+    })
+    .join('')
+  const recent = result.timeline
+    .slice(Math.max(0, presentation.frame - 3), presentation.frame + 1)
+    .map(
+      (item, index, items) => `<li class="${index === items.length - 1 ? 'current' : ''}">
+        <span>${item.round === 0 ? 'OP' : `R${item.round}`}</span>
+        <p>${item.message}</p>
+      </li>`,
+    )
+    .join('')
+  const isLast = presentation.frame === result.timeline.length - 1
+
+  return `<section class="battle-theater panel" data-visual="${visualClass}">
+    <header class="battle-header">
+      <div>
+        <div class="eyebrow">DETERMINISTIC COMBAT // ${enemy.objective.toUpperCase()}</div>
+        <h2>${enemy.name}</h2>
+        <p>${enemy.objectiveText}</p>
+      </div>
+      <div class="battle-controls">
+        <span class="frame-count">${presentation.frame + 1} / ${result.timeline.length}</span>
+        ${
+          isLast
+            ? `<button class="battle-control primary" data-battle="finish">查看結果 →</button>`
+            : `<button class="battle-control" data-battle="pause">${presentation.playing ? '暫停' : '繼續'}</button>
+               <button class="battle-control" data-battle="speed">${presentation.speed}×</button>
+               <button class="battle-control" data-battle="skip">跳過</button>`
+        }
+      </div>
+    </header>
+
+    <div class="battle-layout">
+      <aside class="command-rail">
+        <div class="eyebrow">誓約佇列</div>
+        <ol>${commandRail}</ol>
+      </aside>
+
+      <div class="arena ${visualClass}">
+        <div class="arena-grid" aria-hidden="true"></div>
+        <div class="combatant player ${visualClass === 'attack' ? 'is-hit' : ''} ${visualClass.startsWith('player-') ? 'is-active' : ''}">
+          <div class="combatant-label"><span>YOU</span><strong>誓約核心</strong></div>
+          <div class="player-sigil">
+            <span class="sigil-orbit"></span>
+            <span class="sigil-core"></span>
+            ${entry.guard > 0 ? `<span class="guard-shell"></span>` : ''}
+          </div>
+          <div class="vital-row"><span>RESOLVE</span><strong>${entry.playerResolve}</strong></div>
+          <div class="vital-bar player-bar"><span style="width:${playerPercent}%"></span></div>
+          <div class="guard-readout"><span>GUARD</span><strong>${entry.guard}</strong></div>
+        </div>
+
+        <div class="impact-lane" aria-hidden="true">
+          <span class="projectile"></span>
+          <span class="impact-ring"></span>
+          <span class="flow-line"></span>
+        </div>
+
+        <div class="combatant enemy ${visualClass === 'damage' || visualClass === 'player-strike' ? 'is-hit' : ''} ${visualClass === 'attack' ? 'is-active' : ''}">
+          <div class="combatant-label"><span>${enemy.tier.toUpperCase()}</span><strong>${enemy.name}</strong></div>
+          <div class="enemy-sigil">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="vital-row"><span>INTEGRITY</span><strong>${entry.enemyHealth}</strong></div>
+          <div class="vital-bar enemy-bar"><span style="width:${enemyPercent}%"></span></div>
+          <div class="objective-badge">${enemy.objective === 'defeat' ? '擊破契約' : '存續契約'}</div>
+        </div>
+
+        <div class="action-banner" role="status" aria-live="polite">
+          <span>${entry.round === 0 ? 'OPENING' : `ROUND ${entry.round}`}</span>
+          <strong>${entry.message}</strong>
+        </div>
+      </div>
+
+      <aside class="round-script">
+        <div class="eyebrow">敵方腳本</div>
+        <ol>${script}</ol>
+      </aside>
+    </div>
+
+    <footer class="battle-footer">
+      <ol class="visual-log">${recent}</ol>
+      <div class="battle-legend">
+        <span><i class="legend-player"></i>玩家作用</span>
+        <span><i class="legend-enemy"></i>敵方作用</span>
+        <span><i class="legend-guard"></i>護盾吸收</span>
+      </div>
+    </footer>
+  </section>`
+}
+
 function renderDraft(): string {
   return `<section class="decision panel">
     <div class="eyebrow">戰後草稿</div>
@@ -183,6 +335,10 @@ function renderEnding(): string {
 }
 
 function render(): void {
+  if (battleTimer !== undefined) {
+    clearTimeout(battleTimer)
+    battleTimer = undefined
+  }
   const progress = enemies
     .map(
       (_, index) =>
@@ -199,6 +355,13 @@ function render(): void {
   root.style.setProperty('--danger', theme.danger)
   root.style.setProperty('--warning', theme.warning)
 
+  const presentationEntry =
+    battlePresentation?.nextState.lastResult?.timeline[
+      battlePresentation.frame
+    ]
+  const displayedResolve =
+    presentationEntry?.playerResolve ?? state.resolve
+
   root.innerHTML = `<div class="app-shell">
     <header class="topbar">
       <div class="brand">
@@ -206,25 +369,64 @@ function render(): void {
         <div><strong>誓約堆疊</strong><small>純草稿・自動結算 Roguelike</small></div>
       </div>
       <div class="run-meta">
-        <div class="resolve"><span>RESOLVE</span><strong>${state.resolve}<small>/20</small></strong></div>
+        <div class="resolve"><span>RESOLVE</span><strong>${displayedResolve}<small>/20</small></strong></div>
         <div class="progress" aria-label="遭遇進度">${progress}</div>
       </div>
     </header>
     <main>
       <div class="seed-row"><span>SEED</span><code>${state.seed}</code><span>${sdk.mode === 'embedded' ? 'PLATFORM' : 'STANDALONE'}</span></div>
-      ${state.phase === 'prepare' ? renderPrepare() : ''}
-      ${state.phase !== 'prepare' ? renderTimeline() : state.lastResult === undefined ? '' : `<details class="previous-trace"><summary>查看上一場追溯</summary>${renderTimeline()}</details>`}
-      ${state.phase === 'draft' ? renderDraft() : ''}
-      ${state.phase === 'victory' || state.phase === 'defeat' ? renderEnding() : ''}
+      ${
+        battlePresentation === null
+          ? `${state.phase === 'prepare' ? renderPrepare() : ''}
+             ${state.phase !== 'prepare' ? renderTimeline() : state.lastResult === undefined ? '' : `<details class="previous-trace"><summary>查看上一場追溯</summary>${renderTimeline()}</details>`}
+             ${state.phase === 'draft' ? renderDraft() : ''}
+             ${state.phase === 'victory' || state.phase === 'defeat' ? renderEnding() : ''}`
+          : renderBattleTheater(battlePresentation)
+      }
     </main>
   </div>`
 
   bindEvents()
+  scheduleBattleFrame()
 }
 
 let pendingEquip: string | null = null
 
 function bindEvents(): void {
+  root
+    .querySelector<HTMLButtonElement>('[data-battle="pause"]')
+    ?.addEventListener('click', () => {
+      if (battlePresentation === null) return
+      battlePresentation.playing = !battlePresentation.playing
+      render()
+    })
+  root
+    .querySelector<HTMLButtonElement>('[data-battle="speed"]')
+    ?.addEventListener('click', () => {
+      if (battlePresentation === null) return
+      battlePresentation.speed =
+        battlePresentation.speed === 1 ? 2 : 1
+      render()
+    })
+  root
+    .querySelector<HTMLButtonElement>('[data-battle="skip"]')
+    ?.addEventListener('click', () => {
+      if (battlePresentation === null) return
+      const timeline =
+        battlePresentation.nextState.lastResult?.timeline
+      if (timeline === undefined) return
+      battlePresentation.frame = timeline.length - 1
+      battlePresentation.playing = false
+      render()
+    })
+  root
+    .querySelector<HTMLButtonElement>('[data-battle="finish"]')
+    ?.addEventListener('click', () => {
+      if (battlePresentation === null) return
+      const nextState = battlePresentation.nextState
+      battlePresentation = null
+      void update(nextState)
+    })
   root.querySelectorAll<HTMLButtonElement>('[data-move]').forEach((button) => {
     button.addEventListener('click', () => {
       const [fromText, deltaText] = button.dataset.move!.split(':')
@@ -264,7 +466,13 @@ function bindEvents(): void {
   root
     .querySelector<HTMLButtonElement>('[data-action="commit"]')
     ?.addEventListener('click', () => {
-      void update(commitEncounter(state))
+      battlePresentation = {
+        nextState: commitEncounter(state),
+        frame: 0,
+        speed: 1,
+        playing: true,
+      }
+      render()
     })
   root.querySelectorAll<HTMLButtonElement>('[data-draft]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -281,6 +489,30 @@ function bindEvents(): void {
     ?.addEventListener('click', () => {
       void update(createInitialState(createSeed()))
     })
+}
+
+function scheduleBattleFrame(): void {
+  if (battlePresentation === null || !battlePresentation.playing) return
+  const timeline =
+    battlePresentation.nextState.lastResult?.timeline
+  if (
+    timeline === undefined ||
+    battlePresentation.frame >= timeline.length - 1
+  ) {
+    battlePresentation.playing = false
+    return
+  }
+  const reducedMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches
+  const delay = reducedMotion
+    ? 180
+    : 760 / battlePresentation.speed
+  battleTimer = setTimeout(() => {
+    if (battlePresentation === null) return
+    battlePresentation.frame += 1
+    render()
+  }, delay)
 }
 
 render()
