@@ -1,3 +1,88 @@
 {
-  "items": []
+  "items": [
+    {
+      "id": "first-word",
+      "name": "先聲誓詞",
+      "trigger": "opening",
+      "effect": { "type": "damage", "value": 5 },
+      "play_change": "搶先壓低敵人生命，提早打開半血觸發窗口。"
+    },
+    {
+      "id": "breach-mark",
+      "name": "破口標記",
+      "trigger": "opening",
+      "effect": { "type": "amplify_base", "value": 1 },
+      "play_change": "放棄立即傷害，讓本場後續每次基礎攻擊更強。"
+    },
+    {
+      "id": "measured-salvo",
+      "name": "節制齊射",
+      "trigger": "round_start",
+      "effect": { "type": "damage", "value": 3 },
+      "play_change": "提供可預測的早期傷害，但會和其他每回合指令爭優先權。"
+    },
+    {
+      "id": "reserve-spark",
+      "name": "後備火種",
+      "trigger": "round_start",
+      "effect": { "type": "heal", "value": 3 },
+      "play_change": "把第一個回合窗口用於續航，延後傷害指令。"
+    },
+    {
+      "id": "stone-protocol",
+      "name": "石牆協議",
+      "trigger": "after_hit",
+      "effect": { "type": "guard", "value": 5 },
+      "play_change": "先承受一次生命傷害，換取對後續連擊的保護。"
+    },
+    {
+      "id": "mirrored-debt",
+      "name": "鏡像債務",
+      "trigger": "after_hit",
+      "effect": { "type": "damage", "value": 5 },
+      "play_change": "把承傷變成反擊，適合敵人前重後輕的腳本。"
+    },
+    {
+      "id": "redline-clause",
+      "name": "紅線條款",
+      "trigger": "self_below_half",
+      "effect": { "type": "damage", "value": 8 },
+      "play_change": "主動接受低血風險，換取一次高爆發。"
+    },
+    {
+      "id": "mercy-loop",
+      "name": "慈悲迴路",
+      "trigger": "self_below_half",
+      "effect": { "type": "heal", "value": 7 },
+      "play_change": "跨過半血時修復 run 資源，犧牲紅線爆發窗口。"
+    },
+    {
+      "id": "finishing-proof",
+      "name": "終局證明",
+      "trigger": "enemy_below_half",
+      "effect": { "type": "damage", "value": 8 },
+      "play_change": "獎勵前半場集中輸出，縮短敵人後段高傷回合。"
+    },
+    {
+      "id": "harvest-logic",
+      "name": "收割邏輯",
+      "trigger": "enemy_below_half",
+      "effect": { "type": "heal", "value": 5 },
+      "play_change": "把進攻門檻轉成跨遭遇續航，而不是立即終結。"
+    },
+    {
+      "id": "sealed-answer",
+      "name": "封印解答",
+      "trigger": "after_hit",
+      "effect": { "type": "guard_and_damage", "value": 3 },
+      "play_change": "效率較低但同時穩住攻防，適合未知 build 的過渡期。"
+    },
+    {
+      "id": "delayed-fuse",
+      "name": "延遲引信",
+      "trigger": "round_start",
+      "effect": { "type": "damage_per_round", "value": 2 },
+      "play_change": "越晚觸發越強，迫使玩家決定是否讓其他 round-start 指令先消耗窗口。"
+    }
+  ]
 }

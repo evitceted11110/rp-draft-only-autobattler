@@ -1,0 +1,64 @@
+{
+  "enemies": [
+    {
+      "id": "toll-keeper",
+      "name": "徵收者",
+      "tier": "normal",
+      "health": 13,
+      "attacks": [2, 3, 3, 4, 4, 5],
+      "lesson": "教玩家辨認 after_hit 與 guard 的差異。"
+    },
+    {
+      "id": "glass-courier",
+      "name": "玻璃信使",
+      "tier": "normal",
+      "health": 15,
+      "attacks": [5, 2, 2, 3, 4, 5],
+      "lesson": "前重後輕，鼓勵 opening 防守或 after_hit 反擊。"
+    },
+    {
+      "id": "patient-clerk",
+      "name": "耐心書記",
+      "tier": "normal",
+      "health": 17,
+      "attacks": [1, 1, 3, 5, 6, 7],
+      "lesson": "後段升壓，鼓勵提早打開 enemy_below_half。"
+    },
+    {
+      "id": "double-entry",
+      "name": "複式劊子手",
+      "tier": "normal",
+      "health": 18,
+      "attacks": [2, 2, 4, 4, 5, 5],
+      "modifier": "連擊回合會分成兩次傷害事件，但每個事件仍只觸發一張指令。",
+      "lesson": "測試 guard 與 after_hit 指令的事件預算。"
+    },
+    {
+      "id": "red-auditor",
+      "name": "赤字稽核官",
+      "tier": "elite",
+      "health": 23,
+      "attacks": [3, 5, 3, 6, 5, 7],
+      "modifier": "第三回合封印槽位 1；玩家在準備畫面可預先看見。",
+      "lesson": "迫使玩家不能永遠把核心答案放在第一格。"
+    },
+    {
+      "id": "compound-judge",
+      "name": "複利判官",
+      "tier": "elite",
+      "health": 26,
+      "attacks": [2, 3, 4, 5, 6, 8],
+      "modifier": "每次未被 guard 吸收的傷害使下一回合攻擊 +1。",
+      "lesson": "把防守轉成降低未來壓力，而非單純延命。"
+    },
+    {
+      "id": "the-notary",
+      "name": "終局公證人",
+      "tier": "boss",
+      "health": 32,
+      "attacks": [3, 4, 5, 6, 7, 9],
+      "modifier": "半血後反轉一次槽位優先序；反轉時點在準備畫面公開。",
+      "lesson": "要求整個 build 在兩種優先序下都能成立。"
+    }
+  ]
+}
