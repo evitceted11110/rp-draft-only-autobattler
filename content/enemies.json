@@ -6,32 +6,39 @@
       "tier": "normal",
       "health": 13,
       "attacks": [2, 3, 3, 4, 4, 5],
-      "lesson": "教玩家辨認 after_hit 與 guard 的差異。"
+      "objective": "defeat",
+      "objective_text": "六回合內擊破",
+      "lesson": "教玩家辨認 after_hit、guard 與敵方半血觸發。"
     },
     {
       "id": "glass-courier",
       "name": "玻璃信使",
       "tier": "normal",
-      "health": 15,
-      "attacks": [5, 2, 2, 3, 4, 5],
-      "lesson": "前重後輕，鼓勵 opening 防守或 after_hit 反擊。"
+      "health": 22,
+      "attacks": [5, 2, 2, 3, 4],
+      "objective": "endure",
+      "objective_text": "撐過五回合公開攻勢",
+      "lesson": "第一次證明不擊殺也能完成契約，讓防守指令直接創造勝利。"
     },
     {
       "id": "patient-clerk",
       "name": "耐心書記",
       "tier": "normal",
-      "health": 17,
+      "health": 18,
       "attacks": [1, 1, 3, 5, 6, 7],
+      "objective": "defeat",
+      "objective_text": "六回合內擊破",
       "lesson": "後段升壓，鼓勵提早打開 enemy_below_half。"
     },
     {
       "id": "double-entry",
       "name": "複式劊子手",
       "tier": "normal",
-      "health": 18,
+      "health": 26,
       "attacks": [2, 2, 4, 4, 5, 5],
-      "modifier": "連擊回合會分成兩次傷害事件，但每個事件仍只觸發一張指令。",
-      "lesson": "測試 guard 與 after_hit 指令的事件預算。"
+      "objective": "endure",
+      "objective_text": "撐過六回合公開攻勢",
+      "lesson": "用持續增壓測試 guard、heal 與 after_hit 的事件預算。"
     },
     {
       "id": "red-auditor",
@@ -39,26 +46,29 @@
       "tier": "elite",
       "health": 23,
       "attacks": [3, 5, 3, 6, 5, 7],
-      "modifier": "第三回合封印槽位 1；玩家在準備畫面可預先看見。",
-      "lesson": "迫使玩家不能永遠把核心答案放在第一格。"
+      "objective": "defeat",
+      "objective_text": "六回合內擊破",
+      "lesson": "要求玩家從前一場防守腳本切回輸出契約。"
     },
     {
       "id": "compound-judge",
       "name": "複利判官",
       "tier": "elite",
-      "health": 26,
+      "health": 30,
       "attacks": [2, 3, 4, 5, 6, 8],
-      "modifier": "每次未被 guard 吸收的傷害使下一回合攻擊 +1。",
-      "lesson": "把防守轉成降低未來壓力，而非單純延命。"
+      "objective": "endure",
+      "objective_text": "撐過六回合公開攻勢",
+      "lesson": "後段重擊讓防守排序與續航草稿成為必要選擇。"
     },
     {
       "id": "the-notary",
       "name": "終局公證人",
       "tier": "boss",
-      "health": 32,
+      "health": 26,
       "attacks": [3, 4, 5, 6, 7, 9],
-      "modifier": "半血後反轉一次槽位優先序；反轉時點在準備畫面公開。",
-      "lesson": "要求整個 build 在兩種優先序下都能成立。"
+      "objective": "defeat",
+      "objective_text": "六回合內完成最終擊破",
+      "lesson": "最終檢查玩家是否能把整局收藏重新編譯成擊破腳本。"
     }
   ]
 }

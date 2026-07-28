@@ -18,14 +18,14 @@
       "id": "measured-salvo",
       "name": "節制齊射",
       "trigger": "round_start",
-      "effect": { "type": "damage", "value": 3 },
+      "effect": { "type": "damage", "value": 4 },
       "play_change": "提供可預測的早期傷害，但會和其他每回合指令爭優先權。"
     },
     {
       "id": "reserve-spark",
       "name": "後備火種",
       "trigger": "round_start",
-      "effect": { "type": "heal", "value": 3 },
+      "effect": { "type": "heal", "value": 4 },
       "play_change": "把第一個回合窗口用於續航，延後傷害指令。"
     },
     {

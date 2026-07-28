@@ -2,6 +2,6 @@
   "slug": "draft-only-autobattler",
   "title": "純草稿・自動結算 Roguelike 卡組構築",
   "tagline": "所有決策都在開戰前，讓決定性戰鬥驗證你的牌組與排陣。",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "entry": "index.html"
 }

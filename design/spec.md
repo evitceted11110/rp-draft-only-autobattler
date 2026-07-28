@@ -1,6 +1,6 @@
 # 純草稿・自動結算 Roguelike 卡組構築：Gate 2 規格
 
-狀態：Gate 2 decision required（Balance 未通過）  
+狀態：使用者人工覆核 Gate 2，Vertical Slice 製作中
 日期：2026-07-28  
 Scope：small
 
@@ -163,10 +163,31 @@ Gate 2 應否決本設計，如果：
 2. 15–20 分鐘、7 戰的 run 是否適合首款作品集 scope？
 3. 是否接受第一版不做永久數值成長、商店與卡牌升級？
 
-## Balance 結果
+## 原 Gate 2 Balance 結果
 
 20,000 局同 seed 第二輪結果未達 Gate 2 門檻：總勝率 11.43%，四種策略勝率落差 39.03 個百分點，前五組勝場 build 佔 82.32%，且仍有三張指令低於 2% 勝場出現率。
 
 這不是再調 1–2 點數值能修正的問題。四個一次性槽位中至少三格必須提供傷害，否則 6 回合內無法通過後段敵人；因此「自由編排條件腳本」實際收斂成「三攻一功能」。詳見 `sim/reports/2026-07-28-gate-2-feasibility.md`。
 
-Designer 與 Balance Engineer 均不建議以本規格進入 Gameplay Engineering。
+Designer 與 Balance Engineer 當時均不建議以該版規格進入 Gameplay Engineering。
+
+## 使用者覆核與結構修訂
+
+2026-07-28 使用者明確要求實際製作第一輪遊戲，接受原市場差異化與平衡風險並人工覆核停止決定。本次不是把失敗模型原封不動工程化，而採原報告建議的第三種結構修正：
+
+- 遭遇公開標示 `defeat`（六回合內擊破）或 `endure`（撐過完整攻擊腳本）契約。
+- 七戰依序交替擊破與撐過，Boss 回到擊破，迫使玩家根據公開目標重新編譯收藏。
+- `endure` 讓 heal／guard／after_hit 直接完成契約，不再只是延長必敗。
+- Boss 生命由 32 收斂至 26，使適應型腳本不必固定三張純攻擊也有數學勝法。
+- 正式 `src/core/` 成為唯一戰鬥真相來源；`sim/live-core.ts` 直接呼叫 production core，不再以簡化原型代替。
+
+20,000 局正式 core 同 seed 結果：
+
+| 指標 | 舊紙上模型 | 正式 core | 門檻 |
+|---|---:|---:|---:|
+| 總勝率 | 11.43% | 25.48% | 25–40% |
+| 四策略勝率落差 | 39.03pp | 7.15pp | ≤18pp |
+| 前五勝場 build 佔比 | 82.32% | 44.14% | ≤45% |
+| 勝利 run 最低指令使用率 | 0% | 19.94% | ≥2% |
+
+前五 build 指標排除固定的第一場教學 loadout，否則固定起手本身會被誤算為玩家策略集中。完整報告見 `sim/reports/2026-07-28-live-core-vertical-slice.md`。
