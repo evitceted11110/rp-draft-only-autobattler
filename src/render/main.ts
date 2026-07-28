@@ -7,8 +7,11 @@ import {
   getCurrentEnemy,
   getDirective,
   reorderLoadout,
+  resolveEncounter,
   setLoadout,
   triggerNames,
+  type Directive,
+  type EffectType,
   type GameState,
   type TimelineEntry,
 } from '../core/index.js'
@@ -51,6 +54,61 @@ function isGameState(value: unknown): value is GameState {
   )
 }
 
+const effectPresentation: Readonly<
+  Record<EffectType, { glyph: string; label: string }>
+> = {
+  damage: { glyph: '✦', label: '直擊' },
+  heal: { glyph: '✚', label: '修復' },
+  guard: { glyph: '⬡', label: '護盾' },
+  amplify_base: { glyph: '▲', label: '強化' },
+  guard_and_damage: { glyph: '◈', label: '格擋反擊' },
+  damage_per_round: { glyph: '⧖', label: '蓄時爆破' },
+}
+
+const triggerGlyphs = {
+  opening: '▶',
+  round_start: '↻',
+  after_hit: '↯',
+  self_below_half: '♥',
+  enemy_below_half: '◇',
+} as const
+
+function effectValue(directive: Directive): string {
+  if (directive.effect === 'damage') return `-${directive.value} 敵方`
+  if (directive.effect === 'heal') return `+${directive.value} RESOLVE`
+  if (directive.effect === 'guard') return `+${directive.value} GUARD`
+  if (directive.effect === 'amplify_base') return `普攻 +${directive.value}`
+  if (directive.effect === 'guard_and_damage') {
+    return `盾 +${directive.value} / 反擊 ${directive.value}`
+  }
+  return `回合 × ${directive.value} 傷害`
+}
+
+function archetypeName(loadout: readonly Directive[]): string {
+  const effects = loadout.map(({ effect }) => effect)
+  const reactive = loadout.filter(
+    ({ trigger }) =>
+      trigger === 'after_hit' || trigger === 'self_below_half',
+  ).length
+  const burst = effects.filter(
+    (effect) =>
+      effect === 'damage' ||
+      effect === 'damage_per_round' ||
+      effect === 'guard_and_damage',
+  ).length
+  const sustain = effects.filter(
+    (effect) =>
+      effect === 'heal' ||
+      effect === 'guard' ||
+      effect === 'guard_and_damage',
+  ).length
+  if (reactive >= 2 && sustain >= 2) return '受擊反制流'
+  if (burst >= 3) return '先手爆發流'
+  if (sustain >= 3) return '高韌續航流'
+  if (effects.includes('amplify_base')) return '普攻增幅流'
+  return '條件連鎖流'
+}
+
 async function update(next: GameState): Promise<void> {
   state = next
   await sdk.storage.set('active-run-v1', state)
@@ -59,6 +117,7 @@ async function update(next: GameState): Promise<void> {
 
 function directiveCard(id: string, index?: number): string {
   const directive = getDirective(id)
+  const presentation = effectPresentation[directive.effect]
   const controls =
     index === undefined
       ? ''
@@ -66,15 +125,61 @@ function directiveCard(id: string, index?: number): string {
           <button class="icon-button" data-move="${index}:-1" aria-label="上移 ${directive.name}" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button class="icon-button" data-move="${index}:1" aria-label="下移 ${directive.name}" ${index === 3 ? 'disabled' : ''}>↓</button>
         </div>`
-  return `<article class="directive-card" data-trigger="${directive.trigger}">
+  return `<article class="directive-card" data-trigger="${directive.trigger}" data-effect="${directive.effect}">
     <div class="card-topline">
       ${index === undefined ? '' : `<span class="slot-number">0${index + 1}</span>`}
-      <span class="trigger">${triggerNames[directive.trigger]}</span>
+      <span class="trigger"><i>${triggerGlyphs[directive.trigger]}</i>${triggerNames[directive.trigger]}</span>
       ${controls}
     </div>
     <h3>${directive.name}</h3>
+    <div class="effect-diagram" aria-label="${triggerNames[directive.trigger]}時，${effectValue(directive)}">
+      <span class="condition-node">${triggerGlyphs[directive.trigger]}</span>
+      <span class="effect-arrow">→</span>
+      <span class="effect-node"><i>${presentation.glyph}</i><strong>${effectValue(directive)}</strong></span>
+    </div>
+    <div class="effect-keywords"><span>${presentation.label}</span><span>每場一次</span></div>
     <p>${directive.description}</p>
   </article>`
+}
+
+function renderBuildPreview(): string {
+  const enemy = getCurrentEnemy(state)
+  const loadout = state.loadout.map(getDirective)
+  const result = resolveEncounter(state.resolve, enemy, loadout)
+  const triggerEntries = new Map(
+    result.timeline
+      .filter(
+        (entry): entry is TimelineEntry & { directiveId: string } =>
+          entry.kind === 'trigger' && entry.directiveId !== undefined,
+      )
+      .map((entry) => [entry.directiveId, entry]),
+  )
+  const chain = loadout
+    .map((directive, index) => {
+      const entry = triggerEntries.get(directive.id)
+      const presentation = effectPresentation[directive.effect]
+      return `<li class="${entry === undefined ? 'dormant' : 'fires'}">
+        <span class="preview-order">${index + 1}</span>
+        <span class="preview-glyph">${presentation.glyph}</span>
+        <span class="preview-copy"><strong>${directive.name}</strong><small>${
+          entry === undefined
+            ? '本戰不會觸發'
+            : `${entry.round === 0 ? '開戰' : `R${entry.round}`} · ${effectValue(directive)}`
+        }</small></span>
+      </li>`
+    })
+    .join('')
+  return `<section class="build-preview" aria-label="目前構築的戰鬥預演">
+    <div class="preview-heading">
+      <div><span>BUILD PREVIEW</span><strong>${archetypeName(loadout)}</strong></div>
+      <div class="forecast ${result.won ? 'win' : 'loss'}">
+        <span>${result.won ? '預測成立' : '預測失敗'}</span>
+        <strong>${result.resolve} / ${result.enemyHealth}</strong>
+        <small>己方 / 敵方</small>
+      </div>
+    </div>
+    <ol>${chain}</ol>
+  </section>`
 }
 
 function renderPrepare(): string {
@@ -107,7 +212,8 @@ function renderPrepare(): string {
         <div class="enemy-health"><span>完整度</span><strong>${enemy.health}</strong></div>
       </div>
       <ol class="attack-script">${attackCells}</ol>
-      <p class="readout">攻擊腳本完全公開。guard 先吸收傷害；同一事件只會觸發最前方仍有 charge 的指令。</p>
+      ${renderBuildPreview()}
+      <p class="readout">預演會依目前排序跑完整場。相同觸發條件只執行排在最前、尚未使用的詞條。</p>
     </section>
 
     <section class="loadout-panel">
@@ -135,31 +241,28 @@ function renderPrepare(): string {
   </section>`
 }
 
-function renderTimeline(): string {
+function traceGlyph(entry: TimelineEntry): string {
+  if (entry.kind === 'attack') return '←'
+  if (entry.kind === 'damage') return '→'
+  if (entry.kind === 'trigger') return '◆'
+  if (entry.kind === 'objective') return '✓'
+  return '•'
+}
+
+function renderTraceMap(): string {
   const result = state.lastResult
   if (result === undefined) return ''
-  return `<section class="timeline panel">
-    <div class="section-heading">
-      <div>
-        <div class="eyebrow">DETERMINISTIC TRACE</div>
-        <h2>戰鬥追溯</h2>
-      </div>
-      <div class="result-chip ${result.won ? 'success' : 'failure'}">
-        ${result.won ? '契約完成' : '契約失敗'}
-      </div>
-    </div>
-    <ol>
-      ${result.timeline
-        .map(
-          (entry) => `<li data-kind="${entry.kind}">
-            <span class="tick">${entry.round === 0 ? 'OP' : `R${entry.round}`}</span>
-            <p>${entry.message}</p>
-            <span class="snapshot">你 ${entry.playerResolve} · 敵 ${entry.enemyHealth} · 盾 ${entry.guard}</span>
-          </li>`,
-        )
-        .join('')}
-    </ol>
-  </section>`
+  return `<ol class="trace-map" aria-label="完整戰鬥事件縮圖">
+    ${result.timeline
+      .map(
+        (entry) => `<li data-kind="${entry.kind}" title="${entry.message}">
+          <span>${entry.round === 0 ? 'OP' : `R${entry.round}`}</span>
+          <strong>${traceGlyph(entry)}</strong>
+          <small>${entry.playerResolve}/${entry.enemyHealth}</small>
+        </li>`,
+      )
+      .join('')}
+  </ol>`
 }
 
 function battleEntryClass(entry: TimelineEntry): string {
@@ -179,11 +282,72 @@ function battleEntryClass(entry: TimelineEntry): string {
   return 'player-charge'
 }
 
+function renderCombatEffect(
+  entry: TimelineEntry,
+  previous: TimelineEntry | undefined,
+): string {
+  const resolveDelta =
+    entry.playerResolve - (previous?.playerResolve ?? state.resolve)
+  const enemyDelta =
+    entry.enemyHealth -
+    (previous?.enemyHealth ?? getCurrentEnemy(state).health)
+  const guardDelta = entry.guard - (previous?.guard ?? 0)
+  const directive =
+    entry.directiveId === undefined ? undefined : getDirective(entry.directiveId)
+  const presentation =
+    directive === undefined ? undefined : effectPresentation[directive.effect]
+  const glyph =
+    presentation?.glyph ??
+    (entry.kind === 'attack'
+      ? '⚠'
+      : entry.kind === 'damage'
+        ? '✦'
+        : entry.kind === 'objective'
+          ? '✓'
+          : '↻')
+  const label =
+    directive?.name ??
+    (entry.kind === 'attack'
+      ? '敵方攻擊'
+      : entry.kind === 'damage'
+        ? '基礎射擊'
+        : entry.kind === 'objective'
+          ? '契約判定'
+          : `ROUND ${entry.round}`)
+  const deltas = [
+    enemyDelta < 0
+      ? `<span class="delta damage-delta">${enemyDelta} 敵方</span>`
+      : '',
+    resolveDelta > 0
+      ? `<span class="delta heal-delta">+${resolveDelta} RESOLVE</span>`
+      : resolveDelta < 0
+        ? `<span class="delta hurt-delta">${resolveDelta} RESOLVE</span>`
+        : '',
+    guardDelta > 0
+      ? `<span class="delta guard-delta">+${guardDelta} GUARD</span>`
+      : guardDelta < 0
+        ? `<span class="delta guard-delta">${guardDelta} GUARD</span>`
+        : '',
+    directive?.effect === 'amplify_base'
+      ? `<span class="delta amplify-delta">普攻 +${directive.value}</span>`
+      : '',
+  ].join('')
+  return `<div class="combat-fx" aria-live="polite">
+    <span class="fx-rune">${glyph}</span>
+    <div><small>${directive === undefined ? entry.kind.toUpperCase() : presentation?.label}</small><strong>${label}</strong></div>
+    <div class="delta-stack">${deltas}</div>
+  </div>`
+}
+
 function renderBattleTheater(presentation: BattlePresentation): string {
   const result = presentation.nextState.lastResult
   if (result === undefined) throw new Error('戰鬥表演缺少結算結果')
   const enemy = getCurrentEnemy(state)
   const entry = result.timeline[presentation.frame]!
+  const previous =
+    presentation.frame === 0
+      ? undefined
+      : result.timeline[presentation.frame - 1]
   const visualClass = battleEntryClass(entry)
   const playerPercent = Math.max(
     0,
@@ -210,9 +374,11 @@ function renderBattleTheater(presentation: BattlePresentation): string {
   const commandRail = state.loadout
     .map((id, index) => {
       const directive = getDirective(id)
+      const effect = effectPresentation[directive.effect]
       return `<li class="${activeDirective === id ? 'active' : ''}">
         <span>0${index + 1}</span>
-        <div><strong>${directive.name}</strong><small>${triggerNames[directive.trigger]}</small></div>
+        <i class="rail-glyph">${effect.glyph}</i>
+        <div><strong>${directive.name}</strong><small>${triggerGlyphs[directive.trigger]} ${triggerNames[directive.trigger]} · ${effectValue(directive)}</small></div>
       </li>`
     })
     .join('')
@@ -271,6 +437,7 @@ function renderBattleTheater(presentation: BattlePresentation): string {
           <span class="impact-ring"></span>
           <span class="flow-line"></span>
         </div>
+        ${renderCombatEffect(entry, previous)}
 
         <div class="combatant enemy ${visualClass === 'damage' || visualClass === 'player-strike' ? 'is-hit' : ''} ${visualClass === 'attack' ? 'is-active' : ''}">
           <div class="combatant-label"><span>${enemy.tier.toUpperCase()}</span><strong>${enemy.name}</strong></div>
@@ -306,7 +473,7 @@ function renderBattleTheater(presentation: BattlePresentation): string {
 }
 
 function renderDraft(): string {
-  return `<section class="decision panel">
+  return `<section class="decision post-decision">
     <div class="eyebrow">戰後草稿</div>
     <h2>選一張指令加入收藏</h2>
     <p>下一場仍只能編譯四張；新指令會擴張可用腳本，而不是直接增加數值。</p>
@@ -331,6 +498,55 @@ function renderEnding(): string {
       <button class="secondary-button" data-action="replay">重播同一 seed</button>
       <button class="commit-button compact" data-action="new-run"><span>開始新 run</span></button>
     </div>
+  </section>`
+}
+
+function renderPostBattle(): string {
+  const result = state.lastResult
+  if (result === undefined) return ''
+  const enemy = enemies[state.encounterIndex]!
+  const finalEntry = result.timeline[result.timeline.length - 1]!
+  const playerPercent = Math.max(
+    0,
+    Math.min(100, (finalEntry.playerResolve / 20) * 100),
+  )
+  const enemyPercent = Math.max(
+    0,
+    Math.min(100, (finalEntry.enemyHealth / enemy.health) * 100),
+  )
+  return `<section class="post-battle-screen">
+    <section class="result-overview panel">
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow">CONTRACT RESULT</div>
+          <h2>${enemy.name}</h2>
+        </div>
+        <div class="result-chip ${result.won ? 'success' : 'failure'}">
+          ${result.won ? '契約完成' : '契約失敗'}
+        </div>
+      </div>
+      <p class="result-objective">${enemy.objectiveText}</p>
+      <div class="result-vitals">
+        <div>
+          <div class="vital-row"><span>RESOLVE</span><strong>${finalEntry.playerResolve}</strong></div>
+          <div class="vital-bar player-bar"><span style="width:${playerPercent}%"></span></div>
+        </div>
+        <div>
+          <div class="vital-row"><span>ENEMY</span><strong>${finalEntry.enemyHealth}</strong></div>
+          <div class="vital-bar enemy-bar"><span style="width:${enemyPercent}%"></span></div>
+        </div>
+        <div class="result-guard"><span>GUARD</span><strong>${finalEntry.guard}</strong></div>
+      </div>
+      <div class="trace-heading">
+        <div><span>完整事件圖</span><small>玩家/敵方剩餘值</small></div>
+        <div class="mini-legend"><span>→ 玩家</span><span>← 敵方</span><span>◆ 指令</span></div>
+      </div>
+      ${renderTraceMap()}
+      <p class="result-final-message">${finalEntry.message}</p>
+    </section>
+    <section class="post-action panel">
+      ${state.phase === 'draft' ? renderDraft() : renderEnding()}
+    </section>
   </section>`
 }
 
@@ -362,25 +578,30 @@ function render(): void {
   const displayedResolve =
     presentationEntry?.playerResolve ?? state.resolve
 
-  root.innerHTML = `<div class="app-shell">
+  const screenClass =
+    battlePresentation !== null
+      ? 'screen-battle'
+      : state.phase === 'prepare'
+        ? 'screen-prepare'
+        : 'screen-post'
+
+  root.innerHTML = `<div class="app-shell ${screenClass}">
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark">O//S</span>
         <div><strong>誓約堆疊</strong><small>純草稿・自動結算 Roguelike</small></div>
       </div>
+      <div class="run-id"><span>SEED</span><code>${state.seed}</code><small>${sdk.mode === 'embedded' ? 'PLATFORM' : 'STANDALONE'}</small></div>
       <div class="run-meta">
         <div class="resolve"><span>RESOLVE</span><strong>${displayedResolve}<small>/20</small></strong></div>
         <div class="progress" aria-label="遭遇進度">${progress}</div>
       </div>
     </header>
     <main>
-      <div class="seed-row"><span>SEED</span><code>${state.seed}</code><span>${sdk.mode === 'embedded' ? 'PLATFORM' : 'STANDALONE'}</span></div>
       ${
         battlePresentation === null
           ? `${state.phase === 'prepare' ? renderPrepare() : ''}
-             ${state.phase !== 'prepare' ? renderTimeline() : state.lastResult === undefined ? '' : `<details class="previous-trace"><summary>查看上一場追溯</summary>${renderTimeline()}</details>`}
-             ${state.phase === 'draft' ? renderDraft() : ''}
-             ${state.phase === 'victory' || state.phase === 'defeat' ? renderEnding() : ''}`
+             ${state.phase !== 'prepare' ? renderPostBattle() : ''}`
           : renderBattleTheater(battlePresentation)
       }
     </main>
