@@ -12,8 +12,10 @@ import {
   triggerNames,
   type Directive,
   type EffectType,
+  type Enemy,
   type GameState,
   type TimelineEntry,
+  type TimelineKind,
 } from '../core/index.js'
 import { theme } from '../visual/theme.js'
 import './styles.css'
@@ -73,10 +75,32 @@ const triggerGlyphs = {
   enemy_below_half: '◇',
 } as const
 
+const enemyTierNames: Readonly<Record<Enemy['tier'], string>> = {
+  normal: '一般',
+  elite: '菁英',
+  boss: '首領',
+}
+
+const timelineKindNames: Readonly<Record<TimelineKind, string>> = {
+  round: '回合開始',
+  trigger: '詞條觸發',
+  attack: '敵方攻擊',
+  damage: '玩家攻擊',
+  objective: '契約判定',
+}
+
+function roundLabel(round: number): string {
+  return round === 0 ? '開戰' : `第 ${round} 回合`
+}
+
+function displaySeed(seed: string): string {
+  return seed.replace(/^oath-/, '誓約-')
+}
+
 function effectValue(directive: Directive): string {
   if (directive.effect === 'damage') return `-${directive.value} 敵方`
-  if (directive.effect === 'heal') return `+${directive.value} RESOLVE`
-  if (directive.effect === 'guard') return `+${directive.value} GUARD`
+  if (directive.effect === 'heal') return `決心 +${directive.value}`
+  if (directive.effect === 'guard') return `護盾 +${directive.value}`
   if (directive.effect === 'amplify_base') return `普攻 +${directive.value}`
   if (directive.effect === 'guard_and_damage') {
     return `盾 +${directive.value} / 反擊 ${directive.value}`
@@ -164,14 +188,14 @@ function renderBuildPreview(): string {
         <span class="preview-copy"><strong>${directive.name}</strong><small>${
           entry === undefined
             ? '本戰不會觸發'
-            : `${entry.round === 0 ? '開戰' : `R${entry.round}`} · ${effectValue(directive)}`
+            : `${roundLabel(entry.round)} · ${effectValue(directive)}`
         }</small></span>
       </li>`
     })
     .join('')
   return `<section class="build-preview" aria-label="目前構築的戰鬥預演">
     <div class="preview-heading">
-      <div><span>BUILD PREVIEW</span><strong>${archetypeName(loadout)}</strong></div>
+      <div><span>流派預演</span><strong>${archetypeName(loadout)}</strong></div>
       <div class="forecast ${result.won ? 'win' : 'loss'}">
         <span>${result.won ? '預測成立' : '預測失敗'}</span>
         <strong>${result.resolve} / ${result.enemyHealth}</strong>
@@ -187,7 +211,7 @@ function renderPrepare(): string {
   const attackCells = enemy.attacks
     .map(
       (attack, index) =>
-        `<li><span>R${index + 1}</span><strong>${attack}</strong></li>`,
+        `<li><span>第 ${index + 1} 回合</span><strong>${attack}</strong></li>`,
     )
     .join('')
   const loadout = state.loadout
@@ -203,7 +227,7 @@ function renderPrepare(): string {
 
   return `<section class="workspace">
     <section class="enemy-panel panel">
-      <div class="eyebrow">公開契約 // ${enemy.tier.toUpperCase()}</div>
+      <div class="eyebrow">公開契約 // ${enemyTierNames[enemy.tier]}</div>
       <div class="enemy-heading">
         <div>
           <h2>${enemy.name}</h2>
@@ -219,7 +243,7 @@ function renderPrepare(): string {
     <section class="loadout-panel">
       <div class="section-heading">
         <div>
-          <div class="eyebrow">COMPILE QUEUE</div>
+          <div class="eyebrow">編譯佇列</div>
           <h2>四格誓約腳本</h2>
         </div>
         <span class="hint">↑ ↓ 改變事件優先序</span>
@@ -256,7 +280,7 @@ function renderTraceMap(): string {
     ${result.timeline
       .map(
         (entry) => `<li data-kind="${entry.kind}" title="${entry.message}">
-          <span>${entry.round === 0 ? 'OP' : `R${entry.round}`}</span>
+          <span>${roundLabel(entry.round)}</span>
           <strong>${traceGlyph(entry)}</strong>
           <small>${entry.playerResolve}/${entry.enemyHealth}</small>
         </li>`,
@@ -313,20 +337,20 @@ function renderCombatEffect(
         ? '基礎射擊'
         : entry.kind === 'objective'
           ? '契約判定'
-          : `ROUND ${entry.round}`)
+          : `第 ${entry.round} 回合`)
   const deltas = [
     enemyDelta < 0
       ? `<span class="delta damage-delta">${enemyDelta} 敵方</span>`
       : '',
     resolveDelta > 0
-      ? `<span class="delta heal-delta">+${resolveDelta} RESOLVE</span>`
+      ? `<span class="delta heal-delta">決心 +${resolveDelta}</span>`
       : resolveDelta < 0
-        ? `<span class="delta hurt-delta">${resolveDelta} RESOLVE</span>`
+        ? `<span class="delta hurt-delta">決心 ${resolveDelta}</span>`
         : '',
     guardDelta > 0
-      ? `<span class="delta guard-delta">+${guardDelta} GUARD</span>`
+      ? `<span class="delta guard-delta">護盾 +${guardDelta}</span>`
       : guardDelta < 0
-        ? `<span class="delta guard-delta">${guardDelta} GUARD</span>`
+        ? `<span class="delta guard-delta">護盾 ${guardDelta}</span>`
         : '',
     directive?.effect === 'amplify_base'
       ? `<span class="delta amplify-delta">普攻 +${directive.value}</span>`
@@ -334,7 +358,7 @@ function renderCombatEffect(
   ].join('')
   return `<div class="combat-fx" aria-live="polite">
     <span class="fx-rune">${glyph}</span>
-    <div><small>${directive === undefined ? entry.kind.toUpperCase() : presentation?.label}</small><strong>${label}</strong></div>
+    <div><small>${directive === undefined ? timelineKindNames[entry.kind] : presentation?.label}</small><strong>${label}</strong></div>
     <div class="delta-stack">${deltas}</div>
   </div>`
 }
@@ -367,7 +391,7 @@ function renderBattleTheater(presentation: BattlePresentation): string {
             ? 'active'
             : ''
       }">
-        <span>R${index + 1}</span><strong>${attack}</strong>
+        <span>第 ${index + 1} 回合</span><strong>${attack}</strong>
       </li>`,
     )
     .join('')
@@ -386,7 +410,7 @@ function renderBattleTheater(presentation: BattlePresentation): string {
     .slice(Math.max(0, presentation.frame - 3), presentation.frame + 1)
     .map(
       (item, index, items) => `<li class="${index === items.length - 1 ? 'current' : ''}">
-        <span>${item.round === 0 ? 'OP' : `R${item.round}`}</span>
+        <span>${roundLabel(item.round)}</span>
         <p>${item.message}</p>
       </li>`,
     )
@@ -396,7 +420,7 @@ function renderBattleTheater(presentation: BattlePresentation): string {
   return `<section class="battle-theater panel" data-visual="${visualClass}">
     <header class="battle-header">
       <div>
-        <div class="eyebrow">DETERMINISTIC COMBAT // ${enemy.objective.toUpperCase()}</div>
+        <div class="eyebrow">決定性戰鬥 // ${enemy.objective === 'defeat' ? '擊破' : '存續'}</div>
         <h2>${enemy.name}</h2>
         <p>${enemy.objectiveText}</p>
       </div>
@@ -421,15 +445,15 @@ function renderBattleTheater(presentation: BattlePresentation): string {
       <div class="arena ${visualClass}">
         <div class="arena-grid" aria-hidden="true"></div>
         <div class="combatant player ${visualClass === 'attack' ? 'is-hit' : ''} ${visualClass.startsWith('player-') ? 'is-active' : ''}">
-          <div class="combatant-label"><span>YOU</span><strong>誓約核心</strong></div>
+          <div class="combatant-label"><span>玩家</span><strong>誓約核心</strong></div>
           <div class="player-sigil">
             <span class="sigil-orbit"></span>
             <span class="sigil-core"></span>
             ${entry.guard > 0 ? `<span class="guard-shell"></span>` : ''}
           </div>
-          <div class="vital-row"><span>RESOLVE</span><strong>${entry.playerResolve}</strong></div>
+          <div class="vital-row"><span>決心</span><strong>${entry.playerResolve}</strong></div>
           <div class="vital-bar player-bar"><span style="width:${playerPercent}%"></span></div>
-          <div class="guard-readout"><span>GUARD</span><strong>${entry.guard}</strong></div>
+          <div class="guard-readout"><span>護盾</span><strong>${entry.guard}</strong></div>
         </div>
 
         <div class="impact-lane" aria-hidden="true">
@@ -440,17 +464,17 @@ function renderBattleTheater(presentation: BattlePresentation): string {
         ${renderCombatEffect(entry, previous)}
 
         <div class="combatant enemy ${visualClass === 'damage' || visualClass === 'player-strike' ? 'is-hit' : ''} ${visualClass === 'attack' ? 'is-active' : ''}">
-          <div class="combatant-label"><span>${enemy.tier.toUpperCase()}</span><strong>${enemy.name}</strong></div>
+          <div class="combatant-label"><span>${enemyTierNames[enemy.tier]}</span><strong>${enemy.name}</strong></div>
           <div class="enemy-sigil">
             <span></span><span></span><span></span>
           </div>
-          <div class="vital-row"><span>INTEGRITY</span><strong>${entry.enemyHealth}</strong></div>
+          <div class="vital-row"><span>完整度</span><strong>${entry.enemyHealth}</strong></div>
           <div class="vital-bar enemy-bar"><span style="width:${enemyPercent}%"></span></div>
           <div class="objective-badge">${enemy.objective === 'defeat' ? '擊破契約' : '存續契約'}</div>
         </div>
 
         <div class="action-banner" role="status" aria-live="polite">
-          <span>${entry.round === 0 ? 'OPENING' : `ROUND ${entry.round}`}</span>
+          <span>${roundLabel(entry.round)}</span>
           <strong>${entry.message}</strong>
         </div>
       </div>
@@ -491,12 +515,12 @@ function renderDraft(): string {
 function renderEnding(): string {
   const won = state.phase === 'victory'
   return `<section class="ending panel ${won ? 'ending-win' : 'ending-loss'}">
-    <div class="eyebrow">${won ? 'RUN CERTIFIED' : 'OATH REJECTED'}</div>
+    <div class="eyebrow">${won ? '冒險認證完成' : '誓約遭到駁回'}</div>
     <h2>${won ? '七份契約全部成立' : `契約在第 ${state.encounterIndex + 1} 戰崩解`}</h2>
     <p>${won ? '你的四格腳本通過終局公證。' : '檢查追溯紀錄，找出讀錯的公開事件或被優先序吃掉的觸發。'}</p>
     <div class="ending-actions">
-      <button class="secondary-button" data-action="replay">重播同一 seed</button>
-      <button class="commit-button compact" data-action="new-run"><span>開始新 run</span></button>
+      <button class="secondary-button" data-action="replay">重播同一種子</button>
+      <button class="commit-button compact" data-action="new-run"><span>開始新冒險</span></button>
     </div>
   </section>`
 }
@@ -518,7 +542,7 @@ function renderPostBattle(): string {
     <section class="result-overview panel">
       <div class="section-heading">
         <div>
-          <div class="eyebrow">CONTRACT RESULT</div>
+          <div class="eyebrow">契約結算</div>
           <h2>${enemy.name}</h2>
         </div>
         <div class="result-chip ${result.won ? 'success' : 'failure'}">
@@ -528,14 +552,14 @@ function renderPostBattle(): string {
       <p class="result-objective">${enemy.objectiveText}</p>
       <div class="result-vitals">
         <div>
-          <div class="vital-row"><span>RESOLVE</span><strong>${finalEntry.playerResolve}</strong></div>
+          <div class="vital-row"><span>決心</span><strong>${finalEntry.playerResolve}</strong></div>
           <div class="vital-bar player-bar"><span style="width:${playerPercent}%"></span></div>
         </div>
         <div>
-          <div class="vital-row"><span>ENEMY</span><strong>${finalEntry.enemyHealth}</strong></div>
+          <div class="vital-row"><span>敵方</span><strong>${finalEntry.enemyHealth}</strong></div>
           <div class="vital-bar enemy-bar"><span style="width:${enemyPercent}%"></span></div>
         </div>
-        <div class="result-guard"><span>GUARD</span><strong>${finalEntry.guard}</strong></div>
+        <div class="result-guard"><span>護盾</span><strong>${finalEntry.guard}</strong></div>
       </div>
       <div class="trace-heading">
         <div><span>完整事件圖</span><small>玩家/敵方剩餘值</small></div>
@@ -588,12 +612,12 @@ function render(): void {
   root.innerHTML = `<div class="app-shell ${screenClass}">
     <header class="topbar">
       <div class="brand">
-        <span class="brand-mark">O//S</span>
-        <div><strong>誓約堆疊</strong><small>純草稿・自動結算 Roguelike</small></div>
+        <span class="brand-mark">誓//約</span>
+        <div><strong>誓約堆疊</strong><small>純草稿・自動結算隨機冒險</small></div>
       </div>
-      <div class="run-id"><span>SEED</span><code>${state.seed}</code><small>${sdk.mode === 'embedded' ? 'PLATFORM' : 'STANDALONE'}</small></div>
+      <div class="run-id"><span>種子</span><code>${displaySeed(state.seed)}</code><small>${sdk.mode === 'embedded' ? '平台版' : '獨立版'}</small></div>
       <div class="run-meta">
-        <div class="resolve"><span>RESOLVE</span><strong>${displayedResolve}<small>/20</small></strong></div>
+        <div class="resolve"><span>決心</span><strong>${displayedResolve}<small>/20</small></strong></div>
         <div class="progress" aria-label="遭遇進度">${progress}</div>
       </div>
     </header>

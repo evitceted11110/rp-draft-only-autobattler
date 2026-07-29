@@ -124,7 +124,7 @@ export const directives: readonly Directive[] = [
     trigger: 'round_start',
     effect: 'heal',
     value: 4,
-    description: '第一個可用的回合開始窗口恢復 4 resolve。',
+    description: '第一個可用的回合開始窗口恢復 4 點決心。',
   },
   {
     id: 'stone-protocol',
@@ -132,7 +132,7 @@ export const directives: readonly Directive[] = [
     trigger: 'after_hit',
     effect: 'guard',
     value: 5,
-    description: '實際受傷後獲得 5 guard，保護後續回合。',
+    description: '實際受傷後獲得 5 點護盾，保護後續回合。',
   },
   {
     id: 'mirrored-debt',
@@ -148,7 +148,7 @@ export const directives: readonly Directive[] = [
     trigger: 'self_below_half',
     effect: 'damage',
     value: 8,
-    description: '首次低於半數 resolve 時造成 8 傷害。',
+    description: '決心首次低於半數時造成 8 點傷害。',
   },
   {
     id: 'mercy-loop',
@@ -156,7 +156,7 @@ export const directives: readonly Directive[] = [
     trigger: 'self_below_half',
     effect: 'heal',
     value: 7,
-    description: '首次低於半數 resolve 時恢復 7。',
+    description: '決心首次低於半數時恢復 7 點。',
   },
   {
     id: 'finishing-proof',
@@ -172,7 +172,7 @@ export const directives: readonly Directive[] = [
     trigger: 'enemy_below_half',
     effect: 'heal',
     value: 5,
-    description: '敵人首次低於半血時恢復 5 resolve。',
+    description: '敵人首次低於半血時恢復 5 點決心。',
   },
   {
     id: 'sealed-answer',
@@ -180,7 +180,7 @@ export const directives: readonly Directive[] = [
     trigger: 'after_hit',
     effect: 'guard_and_damage',
     value: 3,
-    description: '實際受傷後獲得 3 guard 並反擊 3。',
+    description: '實際受傷後獲得 3 點護盾並反擊 3 點傷害。',
   },
   {
     id: 'delayed-fuse',
@@ -380,7 +380,7 @@ export function resolveEncounter(
       timeline,
       state,
       'attack',
-      `${enemy.name}攻擊 ${attack}：guard 吸收 ${absorbed}，resolve 損失 ${received}`,
+      `${enemy.name}攻擊 ${attack}：護盾吸收 ${absorbed}，決心損失 ${received}`,
     )
     if (received > 0) trigger('after_hit')
     if (!selfHalfTriggered && state.resolve <= MAX_RESOLVE / 2) {
@@ -413,7 +413,7 @@ export function resolveEncounter(
 }
 
 export function createInitialState(seed: string): GameState {
-  if (seed.trim().length === 0) throw new Error('seed 不得為空字串')
+  if (seed.trim().length === 0) throw new Error('種子不得為空字串')
   return {
     seed,
     phase: 'prepare',
