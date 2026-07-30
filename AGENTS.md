@@ -1,4 +1,4 @@
-# 純草稿・自動結算 Roguelike 卡組構築 專案規範
+# 誓約堆疊 專案規範
 
 本 repo 必須能在只 clone 自己的情況下執行 `pnpm install && pnpm dev`。
 
